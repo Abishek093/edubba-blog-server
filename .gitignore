@@ -1,0 +1,9 @@
+# Ignore environment variables
+.env
+.env.production
+
+# Ignore dependencies
+node_modules/
+
+# Ignore build files
+dist/
