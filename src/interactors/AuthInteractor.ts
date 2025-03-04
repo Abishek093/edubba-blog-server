@@ -10,7 +10,7 @@ import { userSchema } from '../validation/schemas/userSchema'
 import { generateOtp } from "../utils/OtpGenerator";
 import { generateOtpEmailContent } from "../utils/MailContent";
 import sendMail from "../helper/mailer";
-import { generateToken } from "../helper/jwt";
+import { generateToken, verifyRefreshToken, verifyToken } from "../helper/jwt";
 import { AuthResponse, ICreateUser, IUserResponse } from "../types/Auth";
 import crypto from 'crypto';
 
@@ -18,7 +18,7 @@ import crypto from 'crypto';
 export class AuthInteractor implements IAuthInteractor {
    constructor(@inject('IAuthRepository') private repository: IAuthRepository) { }
 
-   async signup(user: IUser): Promise<void> {
+   async signup(user: IUser): Promise<string> {
       try {
          const validationResult = userSchema.validate(user, { abortEarly: false });
          if (validationResult.error) {
@@ -46,7 +46,8 @@ export class AuthInteractor implements IAuthInteractor {
             existingUser.username = user.username;
             await this.repository.updateUser(existingUser);
             this.dispatchOtp(existingUser.username, existingUser.email);
-            return;
+
+            return existingUser.email;
          }
 
          const existingUsername = await this.repository.getUserByUsername(user.username);
@@ -59,7 +60,8 @@ export class AuthInteractor implements IAuthInteractor {
             existingUser.password = hashedPassword;
             await this.repository.updateUser(existingUser);
             this.dispatchOtp(existingUser.username, existingUser.email);
-            return;
+
+            return existingUser.email;
          }
 
          const hashedPassword = await bcrypt.hash(user.password, 10);
@@ -67,7 +69,7 @@ export class AuthInteractor implements IAuthInteractor {
          const newUser = await this.repository.createUser(userToCreate);
          if (!newUser) throw new CustomError("Failed to create user", HttpStatusCode.INTERNAL_SERVER);
          await this.dispatchOtp(newUser.username, newUser.email);
-         return
+         return newUser.email
       } catch (error) {
          if (error instanceof MongoError && error.code === 11000) {
             throw new CustomError("User with this email already exists", HttpStatusCode.CONFLICT, { field: "email" });
@@ -118,11 +120,20 @@ export class AuthInteractor implements IAuthInteractor {
    }
 
    async verifyOtp(otp: string, email: string): Promise<void> {
-      if (!otp || !email) throw new CustomError("Plese provide otp", HttpStatusCode.BAD_REQUEST)
+      if (!otp || !email) throw new CustomError("Please provide otp", HttpStatusCode.BAD_REQUEST);
+
       try {
-         const validOtp = await this.repository.getOtp(otp, email)
-         if (!validOtp) throw new CustomError("OTP expired ", HttpStatusCode.NOT_FOUND)
-         await this.repository.verifyUser(email)
+         const validOtp = await this.repository.getOtp(email);
+
+         if (!validOtp) {
+            throw new CustomError("OTP expired", HttpStatusCode.NOT_FOUND);
+         }
+
+         if (validOtp.otp.toString() !== otp) {
+            throw new CustomError("Invalid OTP", HttpStatusCode.BAD_REQUEST);
+         }
+
+         await this.repository.verifyUser(email);
       } catch (error) {
          throw error instanceof CustomError
             ? error
@@ -204,4 +215,48 @@ export class AuthInteractor implements IAuthInteractor {
             );
       }
    }
+
+   async getUserByToken(token: string): Promise<IUserResponse> {
+      try {
+         const decoded = verifyToken(token);
+         if (!decoded || typeof decoded === 'string' || !decoded.userId) {
+            throw new CustomError('Invalid or expired token', HttpStatusCode.UNAUTHORIZED);
+         }
+
+         // Fetch user by ID from the token payload
+         const user = await this.repository.getUserById(decoded.userId);
+         if (!user) {
+            throw new CustomError('User not found', HttpStatusCode.NOT_FOUND);
+         }
+
+         if (user.isBlocked) {
+            throw new CustomError('Account is blocked', HttpStatusCode.FORBIDDEN);
+         }
+
+         const { password: _password, ...userResponse } = user;
+         return userResponse as IUserResponse;
+      } catch (error) {
+         throw error instanceof CustomError
+            ? error
+            : new CustomError(
+               error instanceof Error ? error.message : 'Unknown error',
+               HttpStatusCode.INTERNAL_SERVER
+            );
+      }
+   }
+
+   async refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; newRefreshToken: string }> {
+      try {
+        const decoded = verifyRefreshToken(refreshToken);
+        const { accessToken, refreshToken: newRefreshToken } = generateToken(decoded.userId);
+        return { accessToken, newRefreshToken };
+      } catch (error) {
+         throw error instanceof CustomError
+            ? error
+            : new CustomError(
+               error instanceof Error ? error.message : 'Unknown error',
+               HttpStatusCode.INTERNAL_SERVER
+            );
+      }
+    }
 }

@@ -1,6 +1,8 @@
 import { injectable, inject } from "tsyringe";
 import { IAuthInteractor } from "../../interfaces/auth/IAuthInteractor"
 import { NextFunction, Request, Response } from "express";
+import CustomError from "../../errors/customError";
+import HttpStatusCode from "../../errors/httpStatusCodes";
 
 
 @injectable()
@@ -11,7 +13,7 @@ export class AuthController {
         try {
             const { userData } = req.body
             const newUser = await this.interactor.signup(userData)
-            res.status(201).json("Verify otp to continue")
+            res.status(201).json({ email: newUser })
         } catch (error) {
             next(error)
         }
@@ -21,7 +23,7 @@ export class AuthController {
         try {
             const { otp, email } = req.body
             const verifyOtp = await this.interactor.verifyOtp(otp, email)
-            res.status(200).json("Otp verified successfully")
+            res.status(200).json({ message: "Otp verified successfully please login to continue" })
         } catch (error) {
             next(error)
         }
@@ -47,5 +49,27 @@ export class AuthController {
         }
     }
 
+    async getUser(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const token = req.headers.authorization?.split('Bearer ')[1];
+            if (!token) {
+                throw new CustomError('No token provided', HttpStatusCode.UNAUTHORIZED);
+            }
+            const user = await this.interactor.getUserByToken(token);
+            res.status(200).json(user);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    refreshAccessToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        const { refreshToken } = req.body;
+        try {
+          const { accessToken, newRefreshToken } = await this.interactor.refreshAccessToken(refreshToken);
+          res.status(200).json({ accessToken, refreshToken: newRefreshToken })
+        }  catch (error: any) {
+          next(error)
+        }
+      };
 
 }

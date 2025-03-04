@@ -7,7 +7,8 @@ export interface IAuthRepository{
     createUser(user: ICreateUser): Promise<IUserResponse>
     getUserByUsername(username: string):Promise<string | null>
     saveOtp(otpData: IOtp):Promise<IOtp>
-    getOtp(otp: string, email: string): Promise<IOtpDoc | null>
+    getOtp(email: string): Promise<IOtpDoc | null>
     verifyUser(email: string):Promise<void>
     updateUser(user: IUser): Promise<void>
+    getUserById(id: string): Promise<IUser | null>;
 }

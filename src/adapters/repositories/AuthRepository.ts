@@ -12,10 +12,10 @@ import { ICreateUser, IUserResponse } from "../../types/Auth";
 @injectable()
 export class AuthRepository implements IAuthRepository {
 
-    async getUserByUsername(username: string):Promise<string | null>{
+    async getUserByUsername(username: string): Promise<string | null> {
         try {
-            const existingUsername = await UserModel.findOne({username: username})
-            if(existingUsername){
+            const existingUsername = await UserModel.findOne({ username: username })
+            if (existingUsername) {
                 return existingUsername.username
             }
             return null
@@ -24,7 +24,7 @@ export class AuthRepository implements IAuthRepository {
             throw new CustomError(error, HttpStatusCode.INTERNAL_SERVER);
         }
     }
-    
+
     async getUserByMail(email: string): Promise<IUser | null> {
         try {
             const existingUser = await UserModel.findOne({ email });
@@ -39,7 +39,7 @@ export class AuthRepository implements IAuthRepository {
         try {
             const userDoc = new UserModel(user);
             const savedUser = await userDoc.save();
-            
+
             return savedUser
         } catch (error) {
             if (error instanceof MongoError && error.code === 11000) {
@@ -49,7 +49,7 @@ export class AuthRepository implements IAuthRepository {
         }
     }
 
-    async saveOtp(otpData: IOtp):Promise<IOtp>{
+    async saveOtp(otpData: IOtp): Promise<IOtp> {
         try {
             const otpDoc = new otpModel(otpData)
             return await otpDoc.save()
@@ -58,19 +58,25 @@ export class AuthRepository implements IAuthRepository {
         }
     }
 
-    async getOtp(otp: string, email: string): Promise<IOtpDoc | null>{
+    async getOtp(email: string): Promise<IOtpDoc | null> {
         try {
-            const result = await otpModel.findOne({email: email, otp: otp}).lean()
-            return result  as IOtpDoc | null
+            const result = await otpModel.findOne({ email: email })
+                .sort({ createdAt: -1 })
+                .lean();
+
+            return result as IOtpDoc | null;
         } catch (error) {
-            throw new CustomError(error, HttpStatusCode.INTERNAL_SERVER)
+            throw new CustomError(
+                error instanceof Error ? error.message : "Unknown error",
+                HttpStatusCode.INTERNAL_SERVER
+            );
         }
     }
 
-    async verifyUser(email: string):Promise<void>{
+    async verifyUser(email: string): Promise<void> {
         try {
-            const user = await UserModel.findOne({email: email})
-            if(!user) throw new CustomError("User not found", HttpStatusCode.NOT_FOUND)
+            const user = await UserModel.findOne({ email: email })
+            if (!user) throw new CustomError("User not found", HttpStatusCode.NOT_FOUND)
             user.isVerified = true
             user.save()
         } catch (error) {
@@ -83,6 +89,19 @@ export class AuthRepository implements IAuthRepository {
             await UserModel.updateOne({ email: user.email }, user);
         } catch (error) {
             throw new CustomError(error, HttpStatusCode.INTERNAL_SERVER);
+        }
+    }
+
+    async getUserById(id: string): Promise<IUser | null> {
+        try {
+            const user = await UserModel.findById(id);
+            if (!user) return null;
+            return user.toObject();
+        } catch (error) {
+            throw new CustomError(
+                error instanceof Error ? error.message : 'Unknown error',
+                HttpStatusCode.INTERNAL_SERVER
+            );
         }
     }
 }
