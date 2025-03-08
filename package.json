@@ -5,7 +5,8 @@
   "scripts": {
     "start": "cross-env NODE_ENV=development nodemon src/frameworks/server.ts",
     "build": "tsc",
-    "start:prod": "cross-env NODE_ENV=production npm run build && node dist/frameworks/server.js",
+    "debug": "ls -la && ls -la dist || echo 'No dist directory'",
+    "start:prod": "cross-env NODE_ENV=production node dist/frameworks/server.js",
     "render-postbuild": "npm run build"
   },
   "author": "",
