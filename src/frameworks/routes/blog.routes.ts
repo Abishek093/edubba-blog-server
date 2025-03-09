@@ -13,7 +13,7 @@ blogRoutes.get('/user-blogs/:userId',authenticate, blogController.getUserBlogs.b
 blogRoutes.get('/search', blogController.searchBlogs.bind(blogController)); 
 
 blogRoutes.post('/upload-url',authenticate, blogController.generatePresignedUrl.bind(blogController));
-blogRoutes.get('/:blogId',authenticate, blogController.getBlogById.bind(blogController));
+blogRoutes.get('/:blogId', blogController.getBlogById.bind(blogController));
 blogRoutes.put('/:blogId',authenticate, blogController.updateBlog.bind(blogController));
 blogRoutes.delete('/:blogId',authenticate, blogController.deleteBlog.bind(blogController));
 export default blogRoutes;
